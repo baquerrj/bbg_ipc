@@ -12,13 +12,10 @@
 /* Local Inlcudes */
 #include "common.h"
 
-#define MESSAGE_SIZE 50
-#define HEADER_SIZE  30
+static FILE     *log;
+static int      fifo_id;
+static packet_t *fifo;
 
-#define FIFO_SIZE    MESSAGE_SIZE + HEADER_SIZE
-
-static FILE *log;
-static int fifo_id;
 static struct timespec thread_time;
 
 static void fifo_exit(void)
@@ -26,12 +23,12 @@ static void fifo_exit(void)
    clock_gettime(CLOCK_REALTIME, &thread_time);
    /* Close FIFO */
    close( fifo_id );
-     
-   fprintf(stdout, "\nPID [%d] = %ld s - %ld nsec\nCaught SIGINT signal!\n",
+
+   fprintf(stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
          getpid(), thread_time.tv_sec, thread_time.tv_nsec);
-   fprintf(log, "PID [%d] = %ld s - %ld nsec\nCaught SIGINT signal!\n",
+   fprintf(log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
          getpid(), thread_time.tv_sec, thread_time.tv_nsec);
-      
+
    fclose( log );
    exit(0);
 }
@@ -70,43 +67,44 @@ int main(void)
 
    fprintf(log, "PID %d - Named FIFO:\n",
          getpid());
-   
+
    int fifo_id = open(path_to_fifo, O_RDWR);
    fprintf(log, "Path to FIFO: %s - File Descriptor: %d\n",
          path_to_fifo, fifo_id);
 
+   /* Allocate memory for packet struct */
+   fifo = malloc( sizeof(packet_t) );
+   if( NULL == fifo )
+   {
+      fprintf( stderr, "Encountered error allocating memory for packet struct!\n" );
+      return 1;
+   }
+
    /* Header for message */
-   char header[HEADER_SIZE];
-   sprintf(header, "From PID %d - Length %d\n",
+   sprintf(fifo->header, "From PID %d - Length %d\n",
          getpid(), FIFO_SIZE);
 
-   /* Buffer for message */
-   char buffer[MESSAGE_SIZE];
+   /* Set message type as MESSAGE_PRINT for now */
+   fifo->type = MESSAGE_PRINT;
 
-   /* Buffer for entired message to write to pipe:
-    * header + buffer */
-   char fifo[FIFO_SIZE];
    while( 1 )
    {
       /* Write to buffer */
-      sprintf(buffer, "Hello Friend!\n");
-
-      /* Complete message to write to pipe */
-      sprintf(fifo, "%s %s", header, buffer);
+      sprintf(fifo->body, "Hello Friend!\n");
 
       /* Write full message to pipe */
-      write(fifo_id, fifo, strlen(fifo)+1);
+      write(fifo_id, fifo, sizeof(fifo));
 
       clock_gettime(CLOCK_REALTIME, &thread_time);
-      fprintf(log, "%ld s - %ld nsec - Sending: %s",
-            thread_time.tv_sec, thread_time.tv_nsec, fifo);
+      fprintf(log, "( %ld. %ld secs ) - Sending: %s",
+            thread_time.tv_sec, thread_time.tv_nsec, fifo->body);
 
       /* Read from FIFO */
       read(fifo_id, fifo, sizeof(fifo));
 
       clock_gettime(CLOCK_REALTIME, &thread_time);
-      fprintf(log, "%ld s - %ld nsec - Received: %s",
-            thread_time.tv_sec, thread_time.tv_nsec, fifo);
+      fprintf(log, "( %ld. %ld secs ) - Received: %s",
+            thread_time.tv_sec, thread_time.tv_nsec, fifo->body);
    }
    return 0;
 }
