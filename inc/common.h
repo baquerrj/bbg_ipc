@@ -2,9 +2,10 @@
 #define COMMON_H
 
 #include <pthread.h>
+#include <stdio.h>
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+void fifo_exit(FILE *log, int fifo_id);
 
-
+extern pthread_mutex_t mutex;
 
 #endif /* COMMON_H */

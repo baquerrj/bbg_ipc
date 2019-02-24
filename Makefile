@@ -6,14 +6,21 @@
 CFLAGS = -Wall -g -pthread -I./inc
 BIN 	:= ./bin
 SRC 	:= ./src
+RES	:= ./res
 SRCS  := $(wildcard $(SRC)/*.c)
-OBJS  := $(patsubst $(SRC)/%.c, $(BIN)/%, $(SRCS))
+OBJS  := $(patsubst $(SRC)/%.c, $(RES)/%.o, $(SRCS))
+PROG  := ./bin/prog
 
-all: $(OBJS)
+all: $(PROG)
 
-$(BIN)/%: $(SRC)/%.c
+$(RES)/%.o: $(SRC)/%.c
+	mkdir -p $(RES)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(PROG): $(OBJS)
 	mkdir -p $(BIN)
-	$(CC) $(CFLAGS) $< -o $@ -lrt
+	$(CC) $(CFLAGS) $^ -o $@ -lrt
 
 clean:
 	rm -rf $(BIN)
+	rm -rf $(RES)

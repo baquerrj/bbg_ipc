@@ -11,6 +11,7 @@
 
 /* Local Inlcudes */
 #include "common.h"
+#include "fifo_two.h"
 
 #define MESSAGE_SIZE 50
 #define HEADER_SIZE  30
@@ -21,28 +22,11 @@ static FILE *log;
 static int fifo_id;
 static struct timespec thread_time;
 
-static void fifo_exit(void)
-{
-   clock_gettime(CLOCK_REALTIME, &thread_time);
-   /* Close FIFO */
-   close( fifo_id );
-     
-   fprintf(stdout, "\nPID [%d] = %ld s - %ld nsec\nCaught SIGINT signal!\n",
-         getpid(), thread_time.tv_sec, thread_time.tv_nsec);
-   fprintf(log, "PID [%d] = %ld s - %ld nsec\nCaught SIGINT signal!\n",
-         getpid(), thread_time.tv_sec, thread_time.tv_nsec);
-
-   fclose( log );
-   exit(0);
-}
-
-
-
-void sig_handler(int signo)
+static void sig_handler(int signo)
 {
    if( signo == SIGINT )
    {
-      fifo_exit();
+      fifo_exit( log, fifo_id );
    }
    else
    {
@@ -54,8 +38,9 @@ void sig_handler(int signo)
    return;
 }
 
-int main(void)
+void *fifo_two(void *argc)
 {
+   printf("Mutex = %p\n", &mutex);
    /* Set up signal handling */
    signal(SIGINT, sig_handler);
 
@@ -99,10 +84,12 @@ int main(void)
       /* Complete message to write to pipe */
       sprintf(fifo, "%s %s", header, buffer);
 
+      while( 0 != pthread_mutex_lock(&mutex) );
       /* Write buffer to pipe */
       write(fid, fifo, strlen(fifo)+1);
-      clock_gettime(CLOCK_REALTIME, &thread_time);
-      
+      pthread_mutex_unlock(&mutex);
+ 
+      clock_gettime(CLOCK_REALTIME, &thread_time);     
       fprintf(log, "%ld s - %ld nsec - Sending: %s",
             thread_time.tv_sec, thread_time.tv_nsec, fifo);   
    }
