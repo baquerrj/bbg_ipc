@@ -26,14 +26,14 @@ static void sig_handler(int signo)
 {
    if( signo == SIGINT )
    {
-      fifo_exit( log, fifo_id);
+      fifo_exit( log, fifo_id, signo );
    }
    else
    {
       fprintf(stdout, "PID %d caught unknown signal!\n",
-            getpid());
+            (pid_t)syscall(SYS_gettid));
       fprintf(log, "PID %d caught unknown signal!\n",
-            getpid());
+            (pid_t)syscall(SYS_gettid));
    }
    return;
 }
@@ -54,8 +54,8 @@ void *fifo_one(void *arg)
    log = fopen("first_pid.log", "w");
 
    fprintf(log, "PID %d - Named FIFO:\n",
-         getpid());
-   
+         (pid_t)syscall(SYS_gettid));
+
    int fifo_id = open(path_to_fifo, O_RDWR);
    fprintf(log, "Path to FIFO: %s - File Descriptor: %d\n",
          path_to_fifo, fifo_id);
@@ -63,7 +63,7 @@ void *fifo_one(void *arg)
    /* Header for message */
    char header[HEADER_SIZE];
    sprintf(header, "From PID %d - Length %d\n",
-         getpid(), FIFO_SIZE);
+         (pid_t)syscall(SYS_gettid), FIFO_SIZE);
 
    /* Buffer for message */
    char buffer[MESSAGE_SIZE];
@@ -71,6 +71,7 @@ void *fifo_one(void *arg)
    /* Buffer for entired message to write to pipe:
     * header + buffer */
    char fifo[FIFO_SIZE];
+
    while( 1 )
    {
       /* Write to buffer */
@@ -95,5 +96,6 @@ void *fifo_one(void *arg)
       fprintf(log, "%ld s - %ld nsec - Received: %s",
             thread_time.tv_sec, thread_time.tv_nsec, fifo);
    }
+   fifo_exit( log, fifo_id, -1 );
    return NULL;
 }
