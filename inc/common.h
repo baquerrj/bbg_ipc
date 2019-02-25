@@ -1,6 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define PORT 8080
 #define BODY_SIZE    50
 #define HEADER_SIZE  30
 
