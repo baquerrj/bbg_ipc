@@ -107,7 +107,7 @@ int main(void)
    while( 10 != i )
    {
       /* Read from FIFO */
-      if( 0 > read( fin, msg_in, sizeof(msg_in) ) )
+      if( 0 > read( fin, msg_in, sizeof(*msg_in) ) )
       {
          perror("Encountered error while atttempting to read FIFO!\n" );
       }
@@ -142,7 +142,7 @@ int main(void)
       }
 
       /* Write full message to pipe */
-      if( 0 > write( fout, msg_out, sizeof(msg_out) ) )
+      if( 0 > write( fout, msg_out, sizeof(*msg_out) ) )
       {
          perror( "Encountered error while attempting to write to FIFO!\n" );
       }
