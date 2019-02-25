@@ -13,27 +13,29 @@
 #include "common.h"
 
 static FILE     *log;
-static int      fifo_id;
-static packet_t *fifo;
+static int      fin;
+static int      fout;
+static packet_t *msg_in;
+static packet_t *msg_out;
 
 static struct timespec thread_time;
 
 static void fifo_exit(void)
 {
    clock_gettime(CLOCK_REALTIME, &thread_time);
-   /* Close FIFO */
-   close( fifo_id );
 
-   fprintf(stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-         getpid(), thread_time.tv_sec, thread_time.tv_nsec);
-   fprintf(log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-         getpid(), thread_time.tv_sec, thread_time.tv_nsec);
+   /* Close FIFO */
+   close( fin );
+   close( fout );
+
+   fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
+         getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+   fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
+            getpid(), thread_time.tv_sec, thread_time.tv_nsec );
 
    fclose( log );
    exit(0);
 }
-
-
 
 void sig_handler(int signo)
 {
@@ -43,10 +45,10 @@ void sig_handler(int signo)
    }
    else
    {
-      fprintf(stdout, "PID %d caught unknown signal!\n",
-            getpid());
-      fprintf(log, "PID %d caught unknown signal!\n",
-            getpid());
+      fprintf( stdout, "PID %d caught unknown signal!\n",
+               getpid() );
+      fprintf( log, "PID %d caught unknown signal!\n",
+               getpid() );
    }
    return;
 }
@@ -54,57 +56,116 @@ void sig_handler(int signo)
 int main(void)
 {
    /* Set up signal handling */
-   signal(SIGINT, sig_handler);
+   signal( SIGINT, sig_handler );
 
    /* FIFO File Path */
-   char *path_to_fifo = "/tmp/fifo";
+   char *path_to_fin  = "/tmp/fifo-one";
+   char *path_to_fout = "/tmp/fifo-two";
 
    /* Create FIFO */
-   mkfifo(path_to_fifo, 0666);
+   mkfifo(path_to_fin, 0666);
+   mkfifo(path_to_fout, 0666);
 
    /* Log file */
-   log = fopen("first_pid.log", "w");
+   log = fopen( "first_pid.log", "w" );
 
-   fprintf(log, "PID %d - Named FIFO:\n",
-         getpid());
+   fprintf( log, "PID %d - Named FIFO:\n",
+            getpid());
 
-   int fifo_id = open(path_to_fifo, O_RDWR);
-   fprintf(log, "Path to FIFO: %s - File Descriptor: %d\n",
-         path_to_fifo, fifo_id);
+   if( 0 > (fin = open( path_to_fin, O_RDONLY )) )
+   {
+      perror( "Encountered error opening input FIFO!\n" );
+      return 1;
+   }
+   if( 0 > (fout = open( path_to_fout, O_WRONLY )) )
+   {
+      perror( "Encountered error opening output FIFO!\n" );
+      return 1;
+   }
+
+   fprintf( log, "Path to Input FIFO: %s File Descriptor: %d\n",
+            path_to_fin, fin );
+   fprintf( log, "Path to Output FIFO: %s File Descriptor: %d\n",
+            path_to_fout, fout );
 
    /* Allocate memory for packet struct */
-   fifo = malloc( sizeof(packet_t) );
-   if( NULL == fifo )
+   msg_in = malloc( sizeof(packet_t) );
+   if( NULL == msg_in )
    {
       fprintf( stderr, "Encountered error allocating memory for packet struct!\n" );
       return 1;
    }
 
-   /* Header for message */
-   sprintf(fifo->header, "From PID %d - Length %d\n",
-         getpid(), FIFO_SIZE);
-
-   /* Set message type as MESSAGE_PRINT for now */
-   fifo->type = MESSAGE_PRINT;
-
-   while( 1 )
+   msg_out = malloc( sizeof(packet_t) );
+   if( NULL == msg_out )
    {
-      /* Write to buffer */
-      sprintf(fifo->body, "Hello Friend!\n");
+      fprintf( stderr, "Encountered error allocating memory for packet struct!\n" );
+      return 1;
+   }
+
+   int i = 0;
+   while( 10 != i )
+   {
+      if( NULL != sequence_a[i] )
+      {
+         /* Write string to body of message */
+         sprintf( msg_out->body, "%s", sequence_a[i] );
+         msg_out->type = MESSAGE_PRINT;
+
+         sprintf( msg_out->header, "From PID %d - Length %ld\n",
+               getpid(), strlen(sequence_a[i]) );
+      }
+      else
+      {
+         /* This is a command */
+         msg_out->type = MESSAGE_CMD;
+      }
 
       /* Write full message to pipe */
-      write(fifo_id, fifo, sizeof(fifo));
+      if( 0 > write( fout, msg_out, sizeof(msg_out) ) )
+      {
+         perror( "Encountered error while attempting to write to FIFO!\n" );
+      }
 
-      clock_gettime(CLOCK_REALTIME, &thread_time);
-      fprintf(log, "( %ld. %ld secs ) - Sending: %s",
-            thread_time.tv_sec, thread_time.tv_nsec, fifo->body);
+      clock_gettime( CLOCK_REALTIME, &thread_time );
 
-      /* Read from FIFO */
-      read(fifo_id, fifo, sizeof(fifo));
+      if( MESSAGE_PRINT == msg_out->type )
+      {
+         fprintf( log, "\n( %ld. %ld secs ) - Sending: %s",
+                  thread_time.tv_sec, thread_time.tv_nsec, msg_out->body );
+      }
+      else
+      {
+         /* This is a command, so we don't want to print it - just handle it */
+         fprintf( log, "\n( %ld. %ld secs ) - Sending: COMMAND",
+                  thread_time.tv_sec, thread_time.tv_nsec );
+      }
 
-      clock_gettime(CLOCK_REALTIME, &thread_time);
-      fprintf(log, "( %ld. %ld secs ) - Received: %s",
-            thread_time.tv_sec, thread_time.tv_nsec, fifo->body);
+      /* Read from Input FIFO */
+      if( 0 > read( fin, msg_in, sizeof(msg_in) ) )
+      {
+         perror("Encountered error while atttempting to read FIFO!\n" );
+      }
+
+      clock_gettime( CLOCK_REALTIME, &thread_time );
+
+      if( MESSAGE_PRINT == msg_in->type )
+      {
+         fprintf( log, "\n( %ld. %ld secs ) - Received:\nHeader: %sBody: %s",
+                  thread_time.tv_sec, thread_time.tv_nsec, msg_in->header, msg_in->body );
+      }
+      else
+      {
+         /* This is a command, so we don't want to print it - just handle it */
+         fprintf( log, "\n( %ld. %ld secs ) - Received: COMMAND",
+                  thread_time.tv_sec, thread_time.tv_nsec );
+      }
+
+      i++;
+      if( 10 == i )
+      {
+         i = 0;
+      }
    }
    return 0;
 }
