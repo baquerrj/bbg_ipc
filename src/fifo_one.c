@@ -20,20 +20,39 @@ static packet_t *msg_out;
 
 static struct timespec thread_time;
 
-static void fifo_exit(void)
+typedef enum reasons {
+   REASON_BEGIN,
+   REASON_SIGINT,
+   REASON_SIGPIPE,
+   REASON_MAX
+} reason_e;
+
+static void fifo_exit( reason_e reason )
 {
    clock_gettime(CLOCK_REALTIME, &thread_time);
 
-   /* Close FIFO */
+   switch( reason )
+   {
+      case( REASON_SIGINT ):
+         fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+         fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+         break;
+      case( REASON_SIGPIPE ):
+         fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+         fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+         break;
+      default:
+         break;
+   }
+   fclose( log );
+   free( msg_in );
+   free( msg_out );
    close( fin );
    close( fout );
-
-   fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-         getpid(), thread_time.tv_sec, thread_time.tv_nsec );
-   fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-            getpid(), thread_time.tv_sec, thread_time.tv_nsec );
-
-   fclose( log );
    exit(0);
 }
 
@@ -41,14 +60,11 @@ void sig_handler(int signo)
 {
    if( signo == SIGINT )
    {
-      fifo_exit();
+      fifo_exit( REASON_SIGINT );
    }
-   else
+   else if( signo == SIGPIPE )
    {
-      fprintf( stdout, "PID %d caught unknown signal!\n",
-               getpid() );
-      fprintf( log, "PID %d caught unknown signal!\n",
-               getpid() );
+      fifo_exit( REASON_SIGPIPE );
    }
    return;
 }
@@ -57,6 +73,7 @@ int main(void)
 {
    /* Set up signal handling */
    signal( SIGINT, sig_handler );
+   signal( SIGPIPE, sig_handler );
 
    /* FIFO File Path */
    char *path_to_fin  = "/tmp/fifo-one";
