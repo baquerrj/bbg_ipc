@@ -37,13 +37,13 @@ static void fifo_exit( reason_e reason )
          fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          break;
       case( REASON_SIGPIPE ):
          fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
-                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          break;
       default:
          break;
@@ -74,7 +74,7 @@ int main(void)
    /* Set up signal handling */
    signal( SIGINT, sig_handler );
    signal( SIGPIPE, sig_handler );
-   
+
    /* FIFO File Path */
    char *path_to_fin  = "/tmp/fifo-two";
    char *path_to_fout = "/tmp/fifo-one";

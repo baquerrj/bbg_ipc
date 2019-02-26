@@ -87,7 +87,7 @@ int main(void)
    log = fopen( "first_pid.log", "w" );
 
    fprintf( log, "PID %d - Named FIFO:\n",
-            getpid());
+            getpid() );
 
    if( 0 > (fin = open( path_to_fin, O_RDONLY )) )
    {
@@ -130,7 +130,7 @@ int main(void)
          msg_out->type = MESSAGE_PRINT;
 
          sprintf( msg_out->header, "From PID %d - Length %ld\n",
-               getpid(), strlen(sequence_a[i]) );
+                  getpid(), strlen(sequence_a[i]) );
       }
       else
       {
