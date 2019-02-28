@@ -13,8 +13,8 @@
 
 /* Max Number of Messages in Queue */
 #define NUM_MESSAGES 10
-#define QUEUE_ONE_NAME   "/queue-one"
-#define QUEUE_TWO_NAME   "/queue-two"
+#define QUEUE_ONE_NAME   "/first-queue"
+#define QUEUE_TWO_NAME   "/second-queue"
 
 /* Defines type of message */
 typedef enum message {
