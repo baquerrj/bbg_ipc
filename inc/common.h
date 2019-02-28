@@ -1,11 +1,20 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#define SHM_SEGMENT_SIZE 65536
+#define SHM_SEGMENT_NAME "/shm"
+#define SEMA_NAME        "/da_semaphore"
+
+/* Sockets and FIFO */
 #define PORT 8080
 #define BODY_SIZE    50
 #define HEADER_SIZE  30
+#define MSG_SIZE    BODY_SIZE + HEADER_SIZE
 
-#define FIFO_SIZE    BODY_SIZE + HEADER_SIZE
+/* Max Number of Messages in Queue */
+#define NUM_MESSAGES 10
+#define QUEUE_ONE_NAME   "/queue-one"
+#define QUEUE_TWO_NAME   "/queue-two"
 
 /* Defines type of message */
 typedef enum message {

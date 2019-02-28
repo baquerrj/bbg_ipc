@@ -13,12 +13,10 @@
 #include <sys/mman.h>
 /* Local Inlcudes */
 #include "common.h"
-#define SHM_SEGMENT_SIZE 65536
-#define SHM_SEGMENT_NAME "/demo-shm"
-#define SEMA_NAME "/demo-sem"
 
-static sem_t *sem;
-
+static packet_t *shm;
+static sem_t    *sem;
+static int      shm_fd;
 static FILE     *log;
 static packet_t *msg_in;
 static packet_t *msg_out;
@@ -34,7 +32,6 @@ typedef enum reasons {
 
 static void *get_shared_memory(void)
 {
-   int shm_fd;
    struct shared_data *shm_p;
 
    shm_fd = shm_open( SHM_SEGMENT_NAME, O_CREAT | O_EXCL | O_RDWR, 0666 );
@@ -98,13 +95,13 @@ static void shm_exit( reason_e reason )
          fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nCaught SIGINT signal!\n",
-                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          break;
       case( REASON_SIGPIPE ):
          fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
-                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          break;
       default:
          break;
@@ -112,6 +109,9 @@ static void shm_exit( reason_e reason )
    fclose( log );
    free( msg_in );
    free( msg_out );
+
+   /* Close Memory */
+   munmap( shm, SHM_SEGMENT_SIZE );
    shm_unlink( SHM_SEGMENT_NAME );
    exit(0);
 }
@@ -141,7 +141,7 @@ int main(void)
    fprintf( log, "PID %d - Shared Memory:\n",
             getpid() );
 
-   packet_t *shm_p = get_shared_memory();
+   shm = get_shared_memory();
 
    /* Allocate memory for packet struct */
    msg_in = malloc( sizeof(packet_t) );
@@ -176,41 +176,41 @@ int main(void)
          msg_out->type = MESSAGE_CMD;
       }
 
-      /* Write full message to pipe */
+      /* Write full message to memory */
       sem_wait( sem );
-      memcpy( shm_p, msg_out, sizeof(*msg_out));
+      memcpy( shm, msg_out, sizeof(*msg_out));
       sem_post( sem );
 
       clock_gettime( CLOCK_REALTIME, &thread_time );
 
       if( MESSAGE_PRINT == msg_out->type )
       {
-         fprintf( log, "\n( %ld. %ld secs ) - Sending: %s",
+         fprintf( log, "\n( %ld.%ld secs ) - Sending: %s",
                   thread_time.tv_sec, thread_time.tv_nsec, msg_out->body );
       }
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld. %ld secs ) - Sending: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Sending: COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
 
-      /* Read from Input FIFO */
+      /* Read from Shared Memory */
       sem_wait( sem );
-      memcpy( msg_in, shm_p, sizeof(*shm_p) );
+      memcpy( msg_in, shm, sizeof(*shm) );
       sem_post( sem );
 
       clock_gettime( CLOCK_REALTIME, &thread_time );
 
       if( MESSAGE_PRINT == msg_in->type )
       {
-         fprintf( log, "\n( %ld. %ld secs ) - Received:\nHeader: %sBody: %s",
+         fprintf( log, "\n( %ld.%ld secs ) - Received:\nHeader: %sBody: %s",
                   thread_time.tv_sec, thread_time.tv_nsec, msg_in->header, msg_in->body );
       }
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld. %ld secs ) - Received: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Received: COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
 
