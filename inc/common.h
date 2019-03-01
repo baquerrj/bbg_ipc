@@ -9,12 +9,20 @@
 #define PORT 8080
 #define BODY_SIZE    50
 #define HEADER_SIZE  30
-#define MSG_SIZE    BODY_SIZE + HEADER_SIZE
 
 /* Max Number of Messages in Queue */
 #define NUM_MESSAGES 10
-#define QUEUE_ONE_NAME   "/first-queue"
-#define QUEUE_TWO_NAME   "/second-queue"
+#define QUEUE_ONE_NAME   "/queue-one"
+#define QUEUE_TWO_NAME   "/queue-two"
+
+/* Enumerator with reasons for exit */
+typedef enum reasons {
+   REASON_BEGIN   = 0,
+   REASON_SIGINT,
+   REASON_SIGPIPE,
+   REASON_CLEAN,
+   REASON_MAX
+} reason_e;
 
 /* Defines type of message */
 typedef enum message {

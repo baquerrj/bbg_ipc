@@ -5,29 +5,29 @@
 #include <unistd.h>
 #include <time.h>
 /* /sys includes */
-//#include <sys/types.h>
-//#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 /* Local Inlcudes */
 #include "common.h"
 
+static int server_fd, client_fd;
+
+/* Log File for process */
 static FILE     *log;
+
+/* Structs for messages:
+ * msg_in for the incoming messages from other processes
+ * msg_out for outgoing messages */
 static packet_t *msg_in;
 static packet_t *msg_out;
 
-static int server_fd, client_fd;
 static struct timespec thread_time;
 
-typedef enum reasons {
-   REASON_BEGIN,
-   REASON_SIGINT,
-   REASON_SIGPIPE,
-   REASON_MAX
-} reason_e;
-
-static void server_close( reason_e reason )
+/* Function to shut down process cleanly
+ * Logs reason for exit, frees allocated memory, closes
+ * file decriptors */
+static void socket_exit( reason_e reason )
 {
    clock_gettime(CLOCK_REALTIME, &thread_time);
 
@@ -45,6 +45,12 @@ static void server_close( reason_e reason )
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
          break;
+      case( REASON_CLEAN ):
+         fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+         fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+         break;
       default:
          break;
    }
@@ -60,11 +66,11 @@ void sig_handler(int signo)
 {
    if( signo == SIGINT )
    {
-      server_close( REASON_SIGINT );
+      socket_exit( REASON_SIGINT );
    }
    else if( signo == SIGPIPE )
    {
-      server_close( REASON_SIGPIPE );
+      socket_exit( REASON_SIGPIPE );
    }
    return;
 }
@@ -197,10 +203,7 @@ int main(void)
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
       i++;
-      if( 10 == i )
-      {
-         i = 0;
-      }
    }
+   socket_exit( REASON_CLEAN );
    return 0;
 }

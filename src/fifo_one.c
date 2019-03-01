@@ -12,21 +12,27 @@
 /* Local Inlcudes */
 #include "common.h"
 
-static FILE     *log;
+/* File Descriptors for named pipes:
+ * fin is the input FIFO for process
+ * fout is output FIFO for process */
 static int      fin;
 static int      fout;
+
+/* Log File for process */
+static FILE     *log;
+
+/* Structs for messages:
+ * msg_in for the incoming messages from other processes
+ * msg_out for outgoing messages */
 static packet_t *msg_in;
 static packet_t *msg_out;
 
+
 static struct timespec thread_time;
 
-typedef enum reasons {
-   REASON_BEGIN,
-   REASON_SIGINT,
-   REASON_SIGPIPE,
-   REASON_MAX
-} reason_e;
-
+/* Function to shut down process cleanly
+ * Logs reason for exit, frees allocated memory, closes
+ * file decriptors */
 static void fifo_exit( reason_e reason )
 {
    clock_gettime(CLOCK_REALTIME, &thread_time);
@@ -45,6 +51,12 @@ static void fifo_exit( reason_e reason )
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
          break;
+      case( REASON_CLEAN ):
+         fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+         fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
+         break;
       default:
          break;
    }
@@ -56,7 +68,10 @@ static void fifo_exit( reason_e reason )
    exit(0);
 }
 
-void sig_handler(int signo)
+/* Signal Handler
+ * Handles SIGINT (Cntrl+C) and SIGPIPE - calling
+ * fifo_exit() specifying which signal was caught */
+void sig_handler( int signo )
 {
    if( signo == SIGINT )
    {
@@ -68,6 +83,7 @@ void sig_handler(int signo)
    }
    return;
 }
+
 
 int main(void)
 {
@@ -92,17 +108,17 @@ int main(void)
    if( 0 > (fin = open( path_to_fin, O_RDONLY )) )
    {
       perror( "Encountered error opening input FIFO!\n" );
-      return 1;
+      exit(1);
    }
    if( 0 > (fout = open( path_to_fout, O_WRONLY )) )
    {
       perror( "Encountered error opening output FIFO!\n" );
-      return 1;
+      exit(1);
    }
 
-   fprintf( log, "Path to Input FIFO: %s File Descriptor: %d\n",
+   fprintf( log, "Path to Input FIFO: %s\nFile Descriptor: %d\n",
             path_to_fin, fin );
-   fprintf( log, "Path to Output FIFO: %s File Descriptor: %d\n",
+   fprintf( log, "Path to Output FIFO: %s\nFile Descriptor: %d\n",
             path_to_fout, fout );
 
    /* Allocate memory for packet struct */
@@ -110,14 +126,14 @@ int main(void)
    if( NULL == msg_in )
    {
       fprintf( stderr, "Encountered error allocating memory for packet struct!\n" );
-      return 1;
+      exit(1);
    }
 
    msg_out = malloc( sizeof(packet_t) );
    if( NULL == msg_out )
    {
       fprintf( stderr, "Encountered error allocating memory for packet struct!\n" );
-      return 1;
+      exit(1);
    }
 
    int i = 0;
@@ -148,13 +164,13 @@ int main(void)
 
       if( MESSAGE_PRINT == msg_out->type )
       {
-         fprintf( log, "\n( %ld. %ld secs ) - Sending: %s",
+         fprintf( log, "\n( %ld.%ld secs ) - Sending:    %s",
                   thread_time.tv_sec, thread_time.tv_nsec, msg_out->body );
       }
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld. %ld secs ) - Sending: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Sending:    COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
 
@@ -168,21 +184,18 @@ int main(void)
 
       if( MESSAGE_PRINT == msg_in->type )
       {
-         fprintf( log, "\n( %ld. %ld secs ) - Received:\nHeader: %sBody: %s",
+         fprintf( log, "\n( %ld.%ld secs ) - Received:\nHeader: %sBody: %s",
                   thread_time.tv_sec, thread_time.tv_nsec, msg_in->header, msg_in->body );
       }
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld. %ld secs ) - Received: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Received:   COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
 
       i++;
-      if( 10 == i )
-      {
-         i = 0;
-      }
    }
+   fifo_exit( REASON_CLEAN );
    return 0;
 }

@@ -18,21 +18,20 @@ static packet_t *shm;
 static sem_t    *sem;
 static int      shm_fd;
 static FILE     *log;
+
+/* Structs for messages:
+ * msg_in for the incoming messages from other processes
+ * msg_out for outgoing messages */
 static packet_t *msg_in;
 static packet_t *msg_out;
 
 static struct timespec thread_time;
 
-typedef enum reasons {
-   REASON_BEGIN,
-   REASON_SIGINT,
-   REASON_SIGPIPE,
-   REASON_MAX
-} reason_e;
+
 
 static void *get_shared_memory(void)
 {
-   struct shared_data *shm_p;
+   void *shm_p;
 
    shm_fd = shm_open( SHM_SEGMENT_NAME, O_CREAT | O_EXCL | O_RDWR, 0666 );
    if( 0 < shm_fd )
@@ -48,8 +47,12 @@ static void *get_shared_memory(void)
          exit(1);
       }
 
-      sem = sem_open( SEMA_NAME, O_RDWR | O_CREAT, 0666, 1 );
-
+      sem = sem_open( SEMA_NAME, O_RDWR | O_CREAT | O_EXCL, 0666, 1 );
+      if( EEXIST == errno )
+      {
+         perror( "Semaphore already exists" );
+         sem = sem_open( SEMA_NAME, O_RDWR, 1 );
+      }
 		if( SEM_FAILED == sem )
       {
 			perror( "Encountered error creating semapahore for shared memory" );
@@ -59,7 +62,7 @@ static void *get_shared_memory(void)
    else if( -1 == shm_fd && EEXIST == errno )
    {
 		/* Already exists: open again without O_CREAT */
-		shm_fd = shm_open(SHM_SEGMENT_NAME, O_RDWR, 0);
+		shm_fd = shm_open( SHM_SEGMENT_NAME, O_RDWR, 0 );
 		sem = sem_open(SEMA_NAME, O_RDWR);
 
 		if( SEM_FAILED == sem )
@@ -68,17 +71,18 @@ static void *get_shared_memory(void)
          exit(1);
       }
 	}
-   else if (shm_fd == -1)
+   else if( -1  == shm_fd )
    {
 		perror( "shm_open " SHM_SEGMENT_NAME );
 		exit(1);
 	}
 
 	/* Map the shared memory */
-	shm_p = mmap(NULL, SHM_SEGMENT_SIZE, PROT_READ | PROT_WRITE,
-		     MAP_SHARED, shm_fd, 0);
+	shm_p = mmap( NULL, SHM_SEGMENT_SIZE, PROT_READ | PROT_WRITE,
+		     MAP_SHARED, shm_fd, 0 );
 
-	if (shm_p == NULL) {
+	if( NULL == shm_p )
+   {
 		perror( "Encountered error memory mapping shared memory" );
 		exit(1);
 	}
@@ -102,6 +106,11 @@ static void shm_exit( reason_e reason )
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
          fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nConnection closed!\n",
                   getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+      case( REASON_CLEAN ):
+         fprintf( stdout, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec );
+         fprintf( log, "\nPID [%d] ( %ld.%ld secs )\nExiting!\n",
+                  getpid(), thread_time.tv_sec, thread_time.tv_nsec ); 
          break;
       default:
          break;
@@ -113,6 +122,7 @@ static void shm_exit( reason_e reason )
    /* Close Memory */
    munmap( shm, SHM_SEGMENT_SIZE );
    shm_unlink( SHM_SEGMENT_NAME );
+   sem_unlink( SEMA_NAME );
    exit(0);
 }
 
@@ -143,6 +153,8 @@ int main(void)
 
    shm = get_shared_memory();
 
+   fprintf( log, "File Descriptor: %d\nShared Memory Name: %s\nSize: %d bytes\nSemaphore Name: %s",
+            shm_fd, SHM_SEGMENT_NAME, SHM_SEGMENT_SIZE, SEMA_NAME );
    /* Allocate memory for packet struct */
    msg_in = malloc( sizeof(packet_t) );
    if( NULL == msg_in )
@@ -158,6 +170,12 @@ int main(void)
       return 1;
    }
 
+   /* Wait for other process */
+   if( -1 == sem_wait( sem ) )
+   {
+      perror( "sem_wait " );
+      exit(1);
+   }
    int i = 0;
    while( 10 != i )
    {
@@ -191,7 +209,7 @@ int main(void)
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld.%ld secs ) - Sending: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Sending:    COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
 
@@ -210,15 +228,11 @@ int main(void)
       else
       {
          /* This is a command, so we don't want to print it - just handle it */
-         fprintf( log, "\n( %ld.%ld secs ) - Received: COMMAND",
+         fprintf( log, "\n( %ld.%ld secs ) - Received:   COMMAND",
                   thread_time.tv_sec, thread_time.tv_nsec );
       }
-
       i++;
-      if( 10 == i )
-      {
-         i = 0;
-      }
    }
+   shm_exit( REASON_CLEAN );
    return 0;
 }
